@@ -1,14 +1,17 @@
 """
-API接口定义
-包含所有自定义的API端点
+路由处理器 - API 端点实现
 """
 
 from fastapi import APIRouter
 import os
-from config import config
+from core.config import config
+from api.routes.model_manager import router as model_router
 
 # 创建路由器
 router = APIRouter()
+
+# 引入模型管理路由
+router.include_router(model_router)
 
 
 @router.get("/health")
