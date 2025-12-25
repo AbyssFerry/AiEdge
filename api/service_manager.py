@@ -76,25 +76,17 @@ class ServiceManager:
                     "status": self.get_status()
                 }
             
-            # 创建日志目录
-            log_dir = project_root / "logs"
-            log_dir.mkdir(exist_ok=True)
-            log_file = log_dir / "model_service.log"
+            # 启动子进程 - 输出重定向到 /dev/null
+            import os
+            devnull = open(os.devnull, 'w')
             
-            # 启动子进程 - 输出到日志文件
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(f"\n{'='*60}\n")
-                f.write(f"子服务启动时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"{'='*60}\n")
-                f.flush()
-                
-                self.process = subprocess.Popen(
-                    [sys.executable, str(model_service_script)],
-                    stdout=f,
-                    stderr=f,
-                    cwd=str(project_root),
-                    start_new_session=True  # 创建新会话，使子进程更独立
-                )
+            self.process = subprocess.Popen(
+                [sys.executable, str(model_service_script)],
+                stdout=devnull,
+                stderr=devnull,
+                cwd=str(project_root),
+                start_new_session=True  # 创建新会话，使子进程更独立
+            )
             
             self.start_time = time.time()
             
@@ -103,24 +95,15 @@ class ServiceManager:
             
             # 检查进程是否成功启动
             if not self.is_running():
-                # 读取日志查看错误
-                try:
-                    with open(log_file, "r", encoding="utf-8") as f:
-                        log_content = f.read()
-                        # 只取最后500个字符
-                        error_msg = log_content[-500:] if len(log_content) > 500 else log_content
-                except:
-                    error_msg = "无法读取日志"
-                
                 return {
                     "success": False,
-                    "message": f"子服务启动失败，请查看日志: {log_file}\n错误信息: {error_msg}",
+                    "message": "子服务启动失败",
                     "status": self.get_status()
                 }
             
             return {
                 "success": True,
-                "message": f"子服务启动成功，日志文件: {log_file}",
+                "message": "子服务启动成功",
                 "status": self.get_status()
             }
             
