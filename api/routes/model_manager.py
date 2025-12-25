@@ -132,7 +132,7 @@ async def delete_model(request: ModelDeleteRequest):
 @router.get("/list", response_model=dict)
 async def list_models():
     """
-    列出 models 目录中的所有文件和文件夹
+    列出 models 目录中的所有 GGUF 模型文件
     """
     try:
         if not config.MODELS_DIR.exists():
@@ -140,31 +140,26 @@ async def list_models():
                 "success": True,
                 "models_dir": str(config.MODELS_DIR),
                 "files": [],
-                "directories": [],
                 "total_count": 0
             }
         
         files = []
-        directories = []
         
+        # 只读取 .gguf 结尾的文件
         for item in config.MODELS_DIR.iterdir():
-            item_info = {
-                "name": item.name,
-                "path": str(item),
-                "size": item.stat().st_size if item.is_file() else None
-            }
-            
-            if item.is_file():
+            if item.is_file() and item.name.lower().endswith('.gguf'):
+                item_info = {
+                    "name": item.name,
+                    "path": str(item),
+                    "size": item.stat().st_size
+                }
                 files.append(item_info)
-            elif item.is_dir():
-                directories.append(item_info)
         
         return {
             "success": True,
             "models_dir": str(config.MODELS_DIR),
             "files": files,
-            "directories": directories,
-            "total_count": len(files) + len(directories)
+            "total_count": len(files)
         }
     
     except Exception as e:
