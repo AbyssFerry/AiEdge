@@ -4,8 +4,8 @@
 """
 
 from fastapi import APIRouter, HTTPException
-from api.service_manager import service_manager
-from core.model_loader import read_models_list
+from core.service_manager import service_manager
+from core.model_loader import model_loader
 from core.config import config
 
 router = APIRouter(prefix="/service", tags=["子服务控制"])
@@ -19,7 +19,7 @@ async def start_service():
     子服务将加载 models 目录中的所有模型
     """
     # 检查是否有可用的模型
-    models = read_models_list()
+    models = model_loader.read_models_list()
     if not models:
         raise HTTPException(
             status_code=400,
@@ -73,7 +73,7 @@ async def restart_service():
     用于在下载新模型后重新加载所有模型
     """
     # 检查是否有可用的模型
-    models = read_models_list()
+    models = model_loader.read_models_list()
     if not models:
         raise HTTPException(
             status_code=400,
@@ -105,7 +105,7 @@ async def get_service_status():
     返回子服务的运行状态、端口、PID 等信息
     """
     status = service_manager.get_status()
-    models = read_models_list()
+    models = model_loader.read_models_list()
     
     return {
         "status": status["status"],

@@ -7,12 +7,12 @@ import uvicorn
 from llama_cpp.server.app import create_app
 from llama_cpp.server.settings import ServerSettings
 from core.config import config
-from core.model_loader import create_model_settings_from_list
+from core.model_loader import model_loader
 
 
 if __name__ == "__main__":
     # 读取并创建所有模型配置
-    model_settings = create_model_settings_from_list()
+    model_settings = model_loader.create_model_settings()
     
     if not model_settings:
         print("❌ 没有可用的模型，请先通过主服务下载模型")

@@ -4,9 +4,9 @@
 
 from fastapi import APIRouter
 from core.config import config
-from core.model_loader import read_models_list
-from api.routes.model_manager import router as model_router
-from api.routes.service_control import router as service_router
+from core.model_loader import model_loader
+from api.routes.model_manager_routes import router as model_router
+from api.routes.service_control_routes import router as service_router
 
 # 创建路由器
 router = APIRouter()
@@ -24,7 +24,7 @@ async def health_check():
     健康检查接口
     返回主服务状态和配置信息
     """
-    models = read_models_list()
+    models = model_loader.read_models_list()
     return {
         "status": "ok",
         "service": "AiEdge LLM Management Server",

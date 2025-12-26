@@ -76,16 +76,9 @@ class ServiceManager:
                     "status": self.get_status()
                 }
             
-            # 启动子进程 - 输出重定向到 /dev/null
-            import os
-            devnull = open(os.devnull, 'w')
-            
+            # 启动子进程
             self.process = subprocess.Popen(
-                [sys.executable, str(model_service_script)],
-                stdout=devnull,
-                stderr=devnull,
-                cwd=str(project_root),
-                start_new_session=True  # 创建新会话，使子进程更独立
+                [sys.executable, str(model_service_script)]
             )
             
             self.start_time = time.time()
