@@ -9,7 +9,7 @@ from core.config import config
 
 
 class ModelLoader:
-    """模型加载器类，负责模型文件加载和 models.txt 管理"""
+    """模型加载器类，负责模型文件加载和数据库管理"""
     
     _instance = None
     
@@ -19,31 +19,18 @@ class ModelLoader:
         return cls._instance
     
     def read_models_list(self):
-        """从 data/models.txt 读取已下载的模型列表"""
-        if not config.MODELS_TXT.exists():
-            print("⚠️  未找到 data/models.txt 文件，将不加载任何模型")
-            return []
-        
-        models = []
-        with open(config.MODELS_TXT, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                # 跳过空行和注释
-                if not line or line.startswith('#'):
-                    continue
-                # 解析格式: repo_id|filename
-                if '|' in line:
-                    parts = line.split('|', 1)
-                    if len(parts) == 2:
-                        models.append({
-                            'repo_id': parts[0].strip(),
-                            'filename': parts[1].strip()
-                        })
-        
-        return models
+        """从数据库读取已下载的模型列表"""
+        models = config.db.get_all_models()
+        return [
+            {
+                'repo_id': model['repo_id'],
+                'filename': model['filename']
+            }
+            for model in models
+        ]
     
     def create_model_settings(self):
-        """根据 models.txt 中的模型列表创建 ModelSettings"""
+        """根据数据库中的模型列表创建 ModelSettings"""
         models_list = self.read_models_list()
         
         if not models_list:
@@ -77,39 +64,12 @@ class ModelLoader:
         return model_settings
     
     def add_model(self, repo_id: str, filename: str):
-        """添加模型到 models.txt"""
-        # 先读取现有模型，避免重复
-        existing_models = self.read_models_list()
-        for model in existing_models:
-            if model['repo_id'] == repo_id and model['filename'] == filename:
-                return  # 已存在，不重复添加
-        
-        # 追加到文件
-        with open(config.MODELS_TXT, 'a', encoding='utf-8') as f:
-            f.write(f"{repo_id}|{filename}\n")
+        """添加模型到数据库"""
+        config.db.add_model(repo_id, filename)
     
     def remove_model(self, filename: str):
-        """从 models.txt 删除模型"""
-        if not config.MODELS_TXT.exists():
-            return
-        
-        # 读取所有行
-        with open(config.MODELS_TXT, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        
-        # 过滤掉要删除的模型
-        with open(config.MODELS_TXT, 'w', encoding='utf-8') as f:
-            for line in lines:
-                # 保留注释和空行
-                if line.strip().startswith('#') or not line.strip():
-                    f.write(line)
-                    continue
-                
-                # 检查是否是要删除的模型
-                if '|' in line:
-                    parts = line.strip().split('|', 1)
-                    if len(parts) == 2 and parts[1].strip() != filename:
-                        f.write(line)
+        """从数据库删除模型"""
+        config.db.remove_model(filename)
 
 
 # 创建全局单例

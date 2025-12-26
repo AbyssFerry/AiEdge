@@ -6,6 +6,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from core.database import Database
 
 
 class Config:
@@ -21,11 +22,14 @@ class Config:
         # 模型和数据目录（使用项目内的目录）
         self.MODELS_DIR = self.PROJECT_ROOT / "models"
         self.DATA_DIR = self.PROJECT_ROOT / "data"
-        self.MODELS_TXT = self.DATA_DIR / "models.txt"
+        self.DB_PATH = self.DATA_DIR / "models.db"
         
         # 确保目录存在
         self.MODELS_DIR.mkdir(exist_ok=True)
         self.DATA_DIR.mkdir(exist_ok=True)
+        
+        # 初始化数据库
+        self.db = Database(str(self.DB_PATH))
         
         # 主服务配置（管理服务）
         self.MAIN_SERVER_HOST = os.getenv("MAIN_SERVER_HOST", "0.0.0.0")
