@@ -76,15 +76,19 @@ uv run ./main.py
 
 ### 3. 下载模型
 
-通过主服务 API 下载模型：
+通过主服务 API 异步下载模型：
 
 ```bash
-curl -X POST http://localhost:23058/models/download \
+# 启动下载任务
+curl -X POST http://localhost:23058/models/download/start \
   -H "Content-Type: application/json" \
   -d '{
     "repo_id": "google/gemma-2-2b-it-GGUF",
     "filename": "gemma-3-1b-it-f16.gguf"
   }'
+
+# 查询下载进度（使用返回的task_id）
+curl http://localhost:23058/models/download/status/{task_id}
 ```
 
 或使用测试工具：
@@ -144,13 +148,15 @@ curl -X POST http://localhost:23058/service/restart
 
 #### 模型管理
 
-- `POST /models/download` - 下载模型
+- `POST /models/download/start` - 异步下载模型
   ```json
   {
     "repo_id": "google/gemma-2-2b-it-GGUF",
     "filename": "gemma-3-1b-it-f16.gguf"
   }
   ```
+
+- `GET /models/download/status/{task_id}` - 查询下载进度
 
 - `DELETE /models/delete` - 删除模型
   ```json
@@ -187,14 +193,14 @@ curl -X POST http://localhost:23058/service/restart
 
 ### .env 配置项
 
-| 配置项                  | 说明                | 默认值    |
-| ----------------------- | ------------------- | --------- |
-| `MAIN_SERVER_HOST`      | 主服务监听地址      | `0.0.0.0` |
-| `MAIN_SERVER_PORT`      | 主服务端口          | `23058`   |
-| `MODEL_SERVER_HOST`     | 子服务监听地址      | `0.0.0.0` |
-| `MODEL_SERVER_PORT`     | 子服务端口          | `23059`   |
-| `N_GPU_LAYERS`          | GPU 层数 (-1=全部)  | `-1`      |
-| `MODELS_TO_DOWNLOAD`    | 要下载的模型列表    | -         |
+| 配置项               | 说明               | 默认值    |
+| -------------------- | ------------------ | --------- |
+| `MAIN_SERVER_HOST`   | 主服务监听地址     | `0.0.0.0` |
+| `MAIN_SERVER_PORT`   | 主服务端口         | `23058`   |
+| `MODEL_SERVER_HOST`  | 子服务监听地址     | `0.0.0.0` |
+| `MODEL_SERVER_PORT`  | 子服务端口         | `23059`   |
+| `N_GPU_LAYERS`       | GPU 层数 (-1=全部) | `-1`      |
+| `MODELS_TO_DOWNLOAD` | 要下载的模型列表   | -         |
 
 ### 模型配置格式
 
@@ -215,7 +221,7 @@ MODELS_TO_DOWNLOAD=google/gemma-2-2b-it-GGUF|gemma-3-1b-it-f16.gguf,unsloth/Qwen
 python main.py
 
 # 2. 下载模型
-curl -X POST http://localhost:23058/models/download -d '{...}'
+curl -X POST http://localhost:23058/models/download/start -d '{...}'
 
 # 3. 启动子服务
 curl -X POST http://localhost:23058/service/start
@@ -228,7 +234,7 @@ curl http://localhost:23059/v1/chat/completions -d '{...}'
 
 ```bash
 # 1. 下载新模型（主服务继续运行）
-curl -X POST http://localhost:23058/models/download -d '{...}'
+curl -X POST http://localhost:23058/models/download/start -d '{...}'
 
 # 2. 重启子服务加载新模型
 curl -X POST http://localhost:23058/service/restart

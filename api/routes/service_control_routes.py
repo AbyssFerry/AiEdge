@@ -11,13 +11,18 @@ from core.config import config
 router = APIRouter(prefix="/service", tags=["子服务控制"])
 
 
-@router.post("/start")
+@router.post(
+    "/start",
+    summary="启动推理服务",
+    description="启动模型推理子服务，加载所有可用模型",
+    responses={
+        200: {"description": "服务启动成功"},
+        400: {"description": "没有可用的模型"},
+        500: {"description": "服务启动失败"}
+    }
+)
 async def start_service():
-    """
-    启动模型推理子服务
-    
-    子服务将加载 models 目录中的所有模型
-    """
+    """启动模型推理子服务，加载所有可用模型"""
     # 检查是否有可用的模型
     models = model_loader.read_models_list()
     if not models:
@@ -43,13 +48,17 @@ async def start_service():
         )
 
 
-@router.post("/stop")
+@router.post(
+    "/stop",
+    summary="停止推理服务",
+    description="优雅地停止模型推理子服务并释放资源",
+    responses={
+        200: {"description": "服务停止成功"},
+        500: {"description": "服务停止失败"}
+    }
+)
 async def stop_service():
-    """
-    停止模型推理子服务
-    
-    优雅地关闭子服务并释放资源
-    """
+    """停止模型推理子服务并释放资源"""
     result = service_manager.stop()
     
     if result["success"]:
@@ -65,12 +74,49 @@ async def stop_service():
         )
 
 
-@router.post("/restart")
+@router.post(
+    "/restart",
+    summary="重启推理服务",
+    description="重启模型推理子服务，重新加载所有模型",
+    responses={
+        200: {"description": "服务重启成功"},
+        400: {"description": "没有可用的模型"},
+        500: {"description": "服务重启失败"}
+    }
+)
 async def restart_service():
     """
-    重启模型推理子服务
+    ## 重启模型推理子服务
     
-    用于在下载新模型后重新加载所有模型
+    停止当前运行的服务并重新启动，重新加载所有模型。
+    
+    ### 主要用途
+    - 🆕 **下载新模型后**：重启以加载新模型
+    - 🔄 **切换模型**：删除旧模型后重启
+    - 🛠️ **解决问题**：服务出现异常时重启
+    
+    ### 重启流程
+    1. 停止当前服务
+    2. 清理资源和缓存
+    3. 扫描 models 目录
+    4. 重新启动服务
+    5. 加载所有模型
+    
+    ### 返回示例
+    ```json
+    {
+      "success": true,
+      "message": "子服务重启成功",
+      "port": 5000,
+      "status": "running",
+      "models": ["new-model.gguf", "old-model.gguf"]
+    }
+    ```
+    
+    ### 注意事项
+    - 重启过程需覀1-5分钟
+    - 重启期间所有对话请求将不可用
+    - 必须有至少一个模型才能重启
     """
     # 检查是否有可用的模型
     models = model_loader.read_models_list()

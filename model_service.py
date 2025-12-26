@@ -17,7 +17,7 @@ if __name__ == "__main__":
     if not model_settings:
         print("❌ 没有可用的模型，请先通过主服务下载模型")
         print(f"📖 主服务地址: http://{config.MAIN_SERVER_HOST}:{config.MAIN_SERVER_PORT}")
-        print("   使用 POST /models/download 接口下载模型")
+        print("   使用 POST /models/download/start 接口异步下载模型")
         exit(1)
     
     # 配置子服务设置

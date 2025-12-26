@@ -68,8 +68,47 @@ def create_application():
     # 创建 FastAPI 应用，传入生命周期管理
     app = FastAPI(
         title="AiEdge LLM Management Server",
-        description="主服务 - 提供模型管理和子服务控制",
+        description="""
+        ## AiEdge AI 边缘服务管理平台
+        
+        提供完整的本地大语言模型（LLM）管理和推理服务。
+        
+        ### 核心功能
+        
+        * 🤖 **模型管理**: 从 Hugging Face 下载、删除和管理 GGUF 格式模型
+        * 🚀 **服务控制**: 启动/停止模型推理子服务，动态加载不同模型
+        * 📁 **文件上传**: 支持大文件分块上传和断点续传
+        * 💬 **智能对话**: 通过子服务提供 AI 对话能力
+        
+        ### 服务架构
+        
+        - **主服务** (端口 23058): 管理层，不加载模型，提供管理接口
+        - **子服务** (端口 23059): 推理层，加载模型并提供对话接口
+        
+        ### 技术栈
+        
+        - FastAPI + llama-cpp-python
+        - 支持 GGUF 量化模型
+        - 异步文件上传和下载
+        """,
         version="2.0.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
+        openapi_tags=[
+            {
+                "name": "模型管理",
+                "description": "📦 模型下载、删除和查询。支持从 Hugging Face 下载 GGUF 格式的量化模型。"
+            },
+            {
+                "name": "服务控制",
+                "description": "🎮 控制模型推理子服务的启动、停止和状态查询。子服务负责加载模型并提供推理能力。"
+            },
+            {
+                "name": "文件上传",
+                "description": "📤 大文件分块上传功能，支持断点续传和进度查询。"
+            }
+        ],
         lifespan=lifespan
     )
 

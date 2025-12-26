@@ -1,0 +1,971 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AiEdge LLM Management Server",
+    "description": "\n        ## AiEdge AI 边缘服务管理平台\n        \n        提供完整的本地大语言模型（LLM）管理和推理服务。\n        \n        ### 核心功能\n        \n        * 🤖 **模型管理**: 从 Hugging Face 下载、删除和管理 GGUF 格式模型\n        * 🚀 **服务控制**: 启动/停止模型推理子服务，动态加载不同模型\n        * 📁 **文件上传**: 支持大文件分块上传和断点续传\n        * 💬 **智能对话**: 通过子服务提供 AI 对话能力\n        \n        ### 服务架构\n        \n        - **主服务** (端口 23058): 管理层，不加载模型，提供管理接口\n        - **子服务** (端口 23059): 推理层，加载模型并提供对话接口\n        \n        ### 技术栈\n        \n        - FastAPI + llama-cpp-python\n        - 支持 GGUF 量化模型\n        - 异步文件上传和下载\n        ",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/models/download/start": {
+      "post": {
+        "tags": [
+          "模型管理"
+        ],
+        "summary": "下载模型",
+        "description": "在后台启动模型下载任务，立即返回任务ID，支持断点续传",
+        "operationId": "start_download_models_download_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDownloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "任务启动成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadTaskResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/download/status/{task_id}": {
+      "get": {
+        "tags": [
+          "模型管理"
+        ],
+        "summary": "查询下载进度",
+        "description": "根据任务ID查询模型下载的实时进度",
+        "operationId": "get_download_status_models_download_status__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回进度信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadProgressResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "任务不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/delete": {
+      "delete": {
+        "tags": [
+          "模型管理"
+        ],
+        "summary": "删除模型文件",
+        "description": "从本地 models 目录删除指定的模型文件或文件夹",
+        "operationId": "delete_model_models_delete_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "模型不存在"
+          },
+          "400": {
+            "description": "参数错误或模型名称无效"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/list": {
+      "get": {
+        "tags": [
+          "模型管理"
+        ],
+        "summary": "列出所有模型",
+        "description": "获取 models 目录中所有可用的 GGUF 模型文件列表",
+        "operationId": "list_models_models_list_get",
+        "responses": {
+          "200": {
+            "description": "成功返回模型列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Models Models List Get"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        }
+      }
+    },
+    "/service/start": {
+      "post": {
+        "tags": [
+          "子服务控制"
+        ],
+        "summary": "启动推理服务",
+        "description": "启动模型推理子服务，加载所有可用模型",
+        "operationId": "start_service_service_start_post",
+        "responses": {
+          "200": {
+            "description": "服务启动成功",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "没有可用的模型"
+          },
+          "500": {
+            "description": "服务启动失败"
+          }
+        }
+      }
+    },
+    "/service/stop": {
+      "post": {
+        "tags": [
+          "子服务控制"
+        ],
+        "summary": "停止推理服务",
+        "description": "优雅地停止模型推理子服务并释放资源",
+        "operationId": "stop_service_service_stop_post",
+        "responses": {
+          "200": {
+            "description": "服务停止成功",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "服务停止失败"
+          }
+        }
+      }
+    },
+    "/service/restart": {
+      "post": {
+        "tags": [
+          "子服务控制"
+        ],
+        "summary": "重启推理服务",
+        "description": "重启模型推理子服务，重新加载所有模型",
+        "operationId": "restart_service_service_restart_post",
+        "responses": {
+          "200": {
+            "description": "服务重启成功",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "没有可用的模型"
+          },
+          "500": {
+            "description": "服务重启失败"
+          }
+        }
+      }
+    },
+    "/service/status": {
+      "get": {
+        "tags": [
+          "子服务控制"
+        ],
+        "summary": "Get Service Status",
+        "description": "获取子服务状态\n\n返回子服务的运行状态、端口、PID 等信息",
+        "operationId": "get_service_status_service_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/init": {
+      "post": {
+        "tags": [
+          "分片上传"
+        ],
+        "summary": "初始化上传会话",
+        "description": "创建分块上传会话，支持断点续传",
+        "operationId": "init_upload_session_upload_init_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChunkUploadInitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "初始化成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChunkUploadInitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数错误或文件格式不支持"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/chunk": {
+      "post": {
+        "tags": [
+          "分片上传"
+        ],
+        "summary": "上传单个分块",
+        "description": "上传文件的单个分块，支持幂等性",
+        "operationId": "upload_chunk_upload_chunk_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_chunk_upload_chunk_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "上传成功",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "参数错误或任务不存在"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/progress/{task_id}": {
+      "get": {
+        "tags": [
+          "分片上传"
+        ],
+        "summary": "Get Upload Progress",
+        "description": "查询上传进度\n\n- 返回已上传的分片数和百分比\n- 返回会话状态（uploading/completed/failed）",
+        "operationId": "get_upload_progress_upload_progress__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChunkUploadProgressResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload/complete": {
+      "post": {
+        "tags": [
+          "分片上传"
+        ],
+        "summary": "Complete Upload",
+        "description": "完成上传并合并分片\n\n- 验证所有分片完整性\n- 按顺序合并分片成完整文件\n- 验证文件大小\n- 保存到模型目录并更新数据库\n- 清理临时文件",
+        "operationId": "complete_upload_upload_complete_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_complete_upload_upload_complete_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChunkUploadCompleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "健康检查接口\n返回主服务状态和配置信息",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "根路径，返回服务信息",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_complete_upload_upload_complete_post": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id",
+            "description": "上传任务ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id"
+        ],
+        "title": "Body_complete_upload_upload_complete_post"
+      },
+      "Body_upload_chunk_upload_chunk_post": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id",
+            "description": "上传任务ID（从 /upload/init 获取）"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "title": "Chunk Index",
+            "description": "分块索引（从 0 开始）"
+          },
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File",
+            "description": "分块文件数据"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "chunk_index",
+          "file"
+        ],
+        "title": "Body_upload_chunk_upload_chunk_post"
+      },
+      "ChunkUploadCompleteResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "是否成功"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息"
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path",
+            "description": "合并后的模型文件路径"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "ChunkUploadCompleteResponse",
+        "description": "分片上传完成响应",
+        "example": {
+          "message": "文件合并成功",
+          "model_path": "/home/user/AiEdge/models/llama-3-8b-instruct-q4.gguf",
+          "success": true
+        }
+      },
+      "ChunkUploadInitRequest": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "description": "文件名（必须是 .gguf 格式）"
+          },
+          "file_size": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "File Size",
+            "description": "文件总大小（字节）"
+          },
+          "total_chunks": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Total Chunks",
+            "description": "总分片数"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "file_size",
+          "total_chunks"
+        ],
+        "title": "ChunkUploadInitRequest",
+        "description": "分片上传初始化请求",
+        "example": {
+          "file_size": 5368709120,
+          "filename": "llama-3-8b-instruct-q4.gguf",
+          "total_chunks": 512
+        }
+      },
+      "ChunkUploadInitResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "是否成功"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id",
+            "description": "上传任务唯一标识"
+          },
+          "uploaded_chunks": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Uploaded Chunks",
+            "description": "已上传的分片索引列表（用于断点续传）"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "ChunkUploadInitResponse",
+        "description": "分片上传初始化响应",
+        "example": {
+          "message": "继续之前的上传，已完成 5/512 个分片",
+          "success": true,
+          "task_id": "550e8400-e29b-41d4-a716-446655440000",
+          "uploaded_chunks": [
+            0,
+            1,
+            2,
+            5,
+            8
+          ]
+        }
+      },
+      "ChunkUploadProgressResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "是否成功"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "上传状态: uploading/completed/failed/not_found"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress",
+            "description": "上传进度百分比 (0-100)",
+            "default": 0
+          },
+          "uploaded_chunks": {
+            "type": "integer",
+            "title": "Uploaded Chunks",
+            "description": "已上传的分片数量",
+            "default": 0
+          },
+          "total_chunks": {
+            "type": "integer",
+            "title": "Total Chunks",
+            "description": "总分片数",
+            "default": 0
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename",
+            "description": "文件名"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size",
+            "description": "文件大小"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "状态描述"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "status",
+          "message"
+        ],
+        "title": "ChunkUploadProgressResponse",
+        "description": "分片上传进度响应",
+        "example": {
+          "file_size": 5368709120,
+          "filename": "llama-3-8b-instruct-q4.gguf",
+          "message": "进度: 335/512",
+          "progress": 65.4,
+          "status": "uploading",
+          "success": true,
+          "total_chunks": 512,
+          "uploaded_chunks": 335
+        }
+      },
+      "DownloadProgressResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "下载状态: starting/downloading/completed/failed/not_found"
+          },
+          "percentage": {
+            "type": "number",
+            "title": "Percentage",
+            "description": "下载百分比 (0-100)",
+            "default": 0
+          },
+          "current_str": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Str",
+            "description": "已下载大小（字符串格式，如 '1.2GB'）"
+          },
+          "total_str": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Str",
+            "description": "总大小（字符串格式，如 '2.4GB'）"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "状态描述信息"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "错误信息（仅在 failed 状态时有值）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "DownloadProgressResponse",
+        "description": "下载进度响应模型",
+        "example": {
+          "current_str": "1.2GB",
+          "message": "下载中: 1.2GB/2.4GB",
+          "percentage": 45.6,
+          "status": "downloading",
+          "total_str": "2.4GB"
+        }
+      },
+      "DownloadTaskResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "任务启动是否成功"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id",
+            "description": "任务唯一ID"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "task_id",
+          "message"
+        ],
+        "title": "DownloadTaskResponse",
+        "description": "下载任务启动响应模型",
+        "example": {
+          "message": "下载任务已启动",
+          "success": true,
+          "task_id": "abc123-def456-ghi789"
+        }
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ModelDeleteRequest": {
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "description": "要删除的模型文件名或目录名"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_name"
+        ],
+        "title": "ModelDeleteRequest",
+        "description": "模型删除请求模型",
+        "example": {
+          "model_name": "llama-2-7b.Q4_K_M.gguf"
+        }
+      },
+      "ModelDownloadRequest": {
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "title": "Repo Id",
+            "description": "模型仓库的 ID，例如: 'meta-llama/Llama-2-7b-hf'"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "description": "要下载的模型文件名（必填）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "repo_id",
+          "filename"
+        ],
+        "title": "ModelDownloadRequest",
+        "description": "模型下载请求模型",
+        "example": {
+          "filename": "llama-2-7b.Q4_K_M.gguf",
+          "repo_id": "TheBloke/Llama-2-7B-GGUF"
+        }
+      },
+      "ModelResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "操作是否成功"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "操作结果消息"
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path",
+            "description": "模型的本地路径"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "额外的详细信息"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "ModelResponse",
+        "description": "模型操作响应模型"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

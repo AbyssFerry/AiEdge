@@ -16,14 +16,47 @@ from core.upload_manager import upload_manager
 router = APIRouter()
 
 
-@router.post("/init", response_model=ChunkUploadInitResponse)
+@router.post(
+    "/init",
+    response_model=ChunkUploadInitResponse,
+    summary="初始化上传会话",
+    description="创建分块上传会话，支持断点续传",
+    responses={
+        200: {"description": "初始化成功"},
+        400: {"description": "参数错误或文件格式不支持"}
+    }
+)
 async def init_upload_session(request: ChunkUploadInitRequest):
     """
-    初始化分片上传会话
+    ## 初始化分块上传会话
     
-    - 生成唯一的任务ID
-    - 检查磁盘空间
-    - 支持断点续传（返回已上传的分片列表）
+    创建一个大文件分块上传会话，返回任务ID和已上传的分块列表。
+    
+    ### 参数说明
+    - **filename**: 文件名（必须以 `.gguf` 结尾）
+    - **file_size**: 文件总大小（字节）
+    - **total_chunks**: 总分块数（建议每块 10MB）
+    
+    ### 功能特性
+    - ✅ **断点续传**: 如果之前上传中断，会返回已上传的分块列表
+    - ✅ **磁盘空间检查**: 自动检查是否有足够空间
+    - ✅ **会话管理**: 会话 24小时后自动过期
+    
+    ### 返回示例
+    ```json
+    {
+      "success": true,
+      "task_id": "550e8400-e29b-41d4-a716-446655440000",
+      "uploaded_chunks": [0, 1, 2, 5],
+      "message": "继续之前的上传，已完成 4/512 个分块"
+    }
+    ```
+    
+    ### 使用流程
+    1. 调用此接口初始化
+    2. 使用返回的 `task_id` 上传分块
+    3. 检查 `uploaded_chunks` 跳过已上传的分块
+    4. 上传完成后调用合并接口
     """
     # 验证文件名格式
     if not request.filename.lower().endswith('.gguf'):
@@ -47,18 +80,22 @@ async def init_upload_session(request: ChunkUploadInitRequest):
     )
 
 
-@router.post("/chunk")
+@router.post(
+    "/chunk",
+    summary="上传单个分块",
+    description="上传文件的单个分块，支持幂等性",
+    responses={
+        200: {"description": "上传成功"},
+        400: {"description": "参数错误或任务不存在"},
+        500: {"description": "服务器内部错误"}
+    }
+)
 async def upload_chunk(
-    task_id: str = Form(..., description="上传任务ID"),
-    chunk_index: int = Form(..., description="分片索引（从0开始）"),
-    file: UploadFile = File(..., description="分片文件数据")
+    task_id: str = Form(..., description="上传任务ID（从 /upload/init 获取）"),
+    chunk_index: int = Form(..., description="分块索引（从 0 开始）"),
+    file: UploadFile = File(..., description="分块文件数据")
 ):
-    """
-    上传单个分片
-    
-    - 支持幂等性（重复上传同一分片直接返回成功）
-    - 返回实时上传进度
-    """
+    """上传单个文件分块，支持幂等性和并行上传"""
     try:
         # 读取分片数据
         chunk_data = await file.read()

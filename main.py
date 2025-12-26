@@ -17,7 +17,7 @@ if __name__ == "__main__":
     print("")
     print("💡 使用说明:")
     print("   1. 访问 /docs 查看所有API接口")
-    print("   2. 使用 /models/download 下载模型")
+    print("   2. 使用 /models/download/start 异步下载模型")
     print("   3. 使用 /service/start 启动模型推理服务")
     print("   4. 推理服务地址: http://{0}:{1}".format(config.MODEL_SERVER_HOST, config.MODEL_SERVER_PORT))
     print("")
