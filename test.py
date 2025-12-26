@@ -6,6 +6,9 @@ AiEdge 综合测试工具
 import requests
 import json
 import time
+import os
+import io
+from pathlib import Path
 from core.config import config
 
 # API 基础 URL
@@ -509,6 +512,326 @@ def test_chat_completion():
 
 
 # ============================================
+# 分片上传测试 (端口 23058)
+# ============================================
+
+def test_chunk_upload():
+    """测试分片上传功能"""
+    print_header("分片上传功能测试")
+    
+    # 子菜单
+    print("""
+📦 分片上传测试:
+   [1] 完整上传流程测试（创建测试文件）
+   [2] 断点续传测试
+   [3] 查询上传进度
+   
+[q] 返回主菜单
+""")
+    
+    choice = input("请选择测试: ").strip().lower()
+    
+    if choice == 'q':
+        return True
+    elif choice == '1':
+        return test_chunk_upload_full_flow()
+    elif choice == '2':
+        return test_chunk_upload_resume()
+    elif choice == '3':
+        return test_chunk_upload_progress()
+    else:
+        print("❌ 无效选择")
+        return False
+
+
+def test_chunk_upload_full_flow():
+    """完整上传流程测试"""
+    print_header("完整上传流程测试")
+    
+    # 使用真实模型文件
+    test_model_path = config.TEST_UPLOAD_MODEL_PATH
+    
+    if not test_model_path or not test_model_path.exists():
+        print("❌ 未配置测试模型路径或文件不存在")
+        print("💡 请在 .env 文件中配置 TEST_UPLOAD_MODEL_PATH")
+        print(f"   当前配置: {test_model_path}")
+        return False
+    
+    print(f"\n📝 使用真实模型文件: {test_model_path.name}")
+    
+    test_file_name = f"uploaded-{test_model_path.name}"
+    test_file_size = test_model_path.stat().st_size
+    chunk_size = config.CHUNK_SIZE  # 使用配置的分片大小
+    total_chunks = (test_file_size + chunk_size - 1) // chunk_size
+    
+    print(f"   文件名: {test_file_name}")
+    print(f"   原始路径: {test_model_path}")
+    print(f"   大小: {test_file_size / (1024*1024):.1f} MB")
+    print(f"   分片大小: {chunk_size / (1024*1024):.1f} MB")
+    print(f"   总分片数: {total_chunks}")
+    
+    # 步骤1: 初始化上传会话
+    print("\n" + "="*60)
+    print("步骤 1: 初始化上传会话")
+    print("="*60)
+    
+    init_payload = {
+        "filename": test_file_name,
+        "file_size": test_file_size,
+        "total_chunks": total_chunks
+    }
+    
+    try:
+        response = requests.post(f"{MAIN_URL}/upload/init", json=init_payload, timeout=10)
+        print_response(response, "初始化响应")
+        
+        if response.status_code != 200:
+            print("❌ 初始化失败")
+            return False
+        
+        result = response.json()
+        task_id = result.get("task_id")
+        
+        if not task_id:
+            print("❌ 未获取到 task_id")
+            return False
+        
+        print(f"\n✅ 获得任务ID: {task_id}")
+        
+        # 步骤2: 上传分片
+        print("\n" + "="*60)
+        print("步骤 2: 上传分片")
+        print("="*60)
+        
+        uploaded_count = 0
+        with open(test_model_path, 'rb') as f:
+            for chunk_idx in range(total_chunks):
+                # 读取真实文件的分片
+                f.seek(chunk_idx * chunk_size)
+                chunk_data = f.read(chunk_size)
+                
+                # 准备上传数据
+                files = {
+                    'file': (f'chunk_{chunk_idx}', io.BytesIO(chunk_data), 'application/octet-stream')
+                }
+                data = {
+                    'task_id': task_id,
+                    'chunk_index': chunk_idx
+                }
+                
+                # 上传分片
+                try:
+                    upload_response = requests.post(
+                        f"{MAIN_URL}/upload/chunk",
+                        files=files,
+                        data=data,
+                        timeout=30
+                    )
+                    
+                    if upload_response.status_code == 200:
+                        result = upload_response.json()
+                        uploaded_count += 1
+                        print(f"   ✅ 分片 {chunk_idx}/{total_chunks-1} 上传成功 - 进度: {result.get('progress', 0):.1f}%")
+                    else:
+                        print(f"   ❌ 分片 {chunk_idx} 上传失败: {upload_response.text}")
+                        return False
+                        
+                except Exception as e:
+                    print(f"   ❌ 分片 {chunk_idx} 上传异常: {str(e)}")
+                    return False
+        
+        print(f"\n✅ 所有分片上传完成 ({uploaded_count}/{total_chunks})")
+        
+        # 步骤3: 查询进度
+        print("\n" + "="*60)
+        print("步骤 3: 查询上传进度")
+        print("="*60)
+        
+        progress_response = requests.get(f"{MAIN_URL}/upload/progress/{task_id}", timeout=10)
+        print_response(progress_response, "进度查询")
+        
+        # 步骤4: 完成合并
+        print("\n" + "="*60)
+        print("步骤 4: 完成合并")
+        print("="*60)
+        
+        complete_data = {
+            'task_id': task_id
+        }
+        
+        complete_response = requests.post(
+            f"{MAIN_URL}/upload/complete",
+            data=complete_data,
+            timeout=60
+        )
+        print_response(complete_response, "合并响应")
+        
+        if complete_response.status_code == 200:
+            result = complete_response.json()
+            print(f"\n✅ 文件上传和合并成功!")
+            print(f"   模型路径: {result.get('model_path')}")
+            print(f"\n💡 提示: 使用选项 [8] 重启子服务来加载新模型")
+            return True
+        else:
+            print("❌ 合并失败")
+            return False
+            
+    except Exception as e:
+        print(f"❌ 测试过程出错: {str(e)}")
+        return False
+
+
+def test_chunk_upload_resume():
+    """断点续传测试"""
+    print_header("断点续传测试")
+    
+    # 使用真实模型文件
+    test_model_path = config.TEST_UPLOAD_MODEL_PATH
+    
+    if not test_model_path or not test_model_path.exists():
+        print("❌ 未配置测试模型路径或文件不存在")
+        print("💡 请在 .env 文件中配置 TEST_UPLOAD_MODEL_PATH")
+        return False
+    
+    print(f"\n📝 使用真实模型文件: {test_model_path.name}")
+    
+    test_file_name = f"resume-{test_model_path.name}"
+    test_file_size = test_model_path.stat().st_size
+    chunk_size = config.CHUNK_SIZE
+    total_chunks = (test_file_size + chunk_size - 1) // chunk_size
+    
+    print(f"   文件名: {test_file_name}")
+    print(f"   大小: {test_file_size / (1024*1024):.1f} MB")
+    print(f"   总分片数: {total_chunks}")
+    
+    # 第一次上传：只上传一半
+    print("\n" + "="*60)
+    print("第一次上传：上传前一半分片")
+    print("="*60)
+    
+    init_payload = {
+        "filename": test_file_name,
+        "file_size": test_file_size,
+        "total_chunks": total_chunks
+    }
+    
+    try:
+        response = requests.post(f"{MAIN_URL}/upload/init", json=init_payload, timeout=10)
+        result = response.json()
+        task_id = result.get("task_id")
+        
+        print(f"✅ 任务ID: {task_id}")
+        
+        # 只上传一半分片
+        half_chunks = total_chunks // 2
+        print(f"\n上传前 {half_chunks} 个分片...")
+        
+        with open(test_model_path, 'rb') as f:
+            for chunk_idx in range(half_chunks):
+                f.seek(chunk_idx * chunk_size)
+                chunk_data = f.read(chunk_size)
+                
+                files = {
+                    'file': (f'chunk_{chunk_idx}', io.BytesIO(chunk_data), 'application/octet-stream')
+                }
+                data = {
+                    'task_id': task_id,
+                    'chunk_index': chunk_idx
+                }
+                
+                requests.post(f"{MAIN_URL}/upload/chunk", files=files, data=data, timeout=30)
+                print(f"   ✅ 分片 {chunk_idx} 已上传")
+        
+        print(f"\n✅ 已上传 {half_chunks}/{total_chunks} 个分片")
+        
+        # 模拟中断，重新初始化
+        print("\n" + "="*60)
+        print("模拟中断后重新初始化（断点续传）")
+        print("="*60)
+        
+        response = requests.post(f"{MAIN_URL}/upload/init", json=init_payload, timeout=10)
+        print_response(response, "断点续传初始化")
+        
+        result = response.json()
+        resumed_task_id = result.get("task_id")
+        uploaded_chunks = result.get("uploaded_chunks", [])
+        
+        print(f"\n✅ 检测到未完成的上传")
+        print(f"   任务ID: {resumed_task_id}")
+        print(f"   已上传分片: {len(uploaded_chunks)}/{total_chunks}")
+        print(f"   分片列表: {uploaded_chunks}")
+        
+        # 继续上传剩余分片
+        print("\n" + "="*60)
+        print("继续上传剩余分片")
+        print("="*60)
+        
+        with open(test_model_path, 'rb') as f:
+            for chunk_idx in range(total_chunks):
+                if chunk_idx in uploaded_chunks:
+                    print(f"   ⏭️  分片 {chunk_idx} 已存在，跳过")
+                    continue
+                
+                f.seek(chunk_idx * chunk_size)
+                chunk_data = f.read(chunk_size)
+                
+                files = {
+                    'file': (f'chunk_{chunk_idx}', io.BytesIO(chunk_data), 'application/octet-stream')
+                }
+                data = {
+                    'task_id': resumed_task_id,
+                    'chunk_index': chunk_idx
+                }
+                
+                requests.post(f"{MAIN_URL}/upload/chunk", files=files, data=data, timeout=30)
+                print(f"   ✅ 分片 {chunk_idx} 已上传")
+        
+        print(f"\n✅ 所有分片上传完成")
+        
+        # 完成合并
+        print("\n" + "="*60)
+        print("完成合并")
+        print("="*60)
+        
+        complete_data = {'task_id': resumed_task_id}
+        complete_response = requests.post(f"{MAIN_URL}/upload/complete", data=complete_data, timeout=60)
+        print_response(complete_response, "合并响应")
+        
+        if complete_response.status_code == 200:
+            print("\n✅ 断点续传测试成功!")
+            print("💡 提示: 使用选项 [8] 重启子服务来加载新模型")
+            return True
+        else:
+            print("❌ 合并失败")
+            return False
+            
+    except Exception as e:
+        print(f"❌ 测试过程出错: {str(e)}")
+        return False
+
+
+def test_chunk_upload_progress():
+    """查询上传进度"""
+    print_header("查询上传进度")
+    
+    task_id = input("\n请输入任务ID: ").strip()
+    
+    if not task_id:
+        print("❌ 任务ID不能为空")
+        return False
+    
+    try:
+        response = requests.get(f"{MAIN_URL}/upload/progress/{task_id}", timeout=10)
+        print_response(response, "进度查询")
+        
+        return response.status_code == 200
+        
+    except Exception as e:
+        print(f"❌ 查询失败: {str(e)}")
+        return False
+
+
+# ============================================
 # 主菜单
 # ============================================
 
@@ -526,15 +849,18 @@ def print_main_menu():
    [3] 查看已下载的模型
    [4] 删除模型
 
+� 分片上传:
+   [5] 分片上传测试
+
 🚀 子服务控制:
-   [5] 查看子服务状态
-   [6] 启动子服务
-   [7] 停止子服务
-   [8] 重启子服务
+   [6] 查看子服务状态
+   [7] 启动子服务
+   [8] 停止子服务
+   [9] 重启子服务
 
 💬 推理测试:
-   [9] 测试子服务连接
-   [10] 聊天对话测试
+   [10] 测试子服务连接
+   [11] 聊天对话测试
 
 [0] 退出
 """)
@@ -563,16 +889,18 @@ def main():
             elif choice == '4':
                 test_delete_model()
             elif choice == '5':
-                test_service_status()
+                test_chunk_upload()
             elif choice == '6':
-                test_start_service()
+                test_service_status()
             elif choice == '7':
-                test_stop_service()
+                test_start_service()
             elif choice == '8':
-                test_restart_service()
+                test_stop_service()
             elif choice == '9':
-                test_model_service_health()
+                test_restart_service()
             elif choice == '10':
+                test_model_service_health()
+            elif choice == '11':
                 test_chat_completion()
             else:
                 print("❌ 无效选择，请重新输入")

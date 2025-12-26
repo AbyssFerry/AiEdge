@@ -7,6 +7,7 @@ from core.config import config
 from core.model_loader import model_loader
 from api.routes.model_manager_routes import router as model_router
 from api.routes.service_control_routes import router as service_router
+from api.routes.upload_routes import router as upload_router
 
 # 创建路由器
 router = APIRouter()
@@ -16,6 +17,9 @@ router.include_router(model_router)
 
 # 引入子服务控制路由
 router.include_router(service_router)
+
+# 引入分片上传路由
+router.include_router(upload_router, prefix="/upload", tags=["分片上传"])
 
 
 @router.get("/health")

@@ -4,12 +4,28 @@
 不加载模型，仅作为管理层
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import config
 from api.routes import router
 from core.service_manager import service_manager
+from core.upload_manager import upload_manager
+
+
+async def cleanup_expired_uploads():
+    """
+    后台任务：定期清理过期的上传会话
+    每小时执行一次
+    """
+    while True:
+        try:
+            await asyncio.sleep(3600)  # 每小时执行一次
+            print("\n🧹 执行定期清理任务...")
+            upload_manager.cleanup_expired_sessions()
+        except Exception as e:
+            print(f"⚠️  清理任务出错: {e}")
 
 
 @asynccontextmanager
@@ -21,7 +37,17 @@ async def lifespan(app: FastAPI):
     # 启动时
     print("🚀 主服务启动")
     
+    # 启动后台清理任务
+    cleanup_task = asyncio.create_task(cleanup_expired_uploads())
+    
     yield
+    
+    # 关闭时 - 取消后台任务
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     
     # 关闭时 - 自动停止子服务
     print("\n🛑 主服务关闭中...")

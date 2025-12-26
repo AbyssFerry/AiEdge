@@ -24,9 +24,13 @@ class Config:
         self.DATA_DIR = self.PROJECT_ROOT / "data"
         self.DB_PATH = self.DATA_DIR / "models.db"
         
+        # 上传临时目录
+        self.UPLOAD_TEMP_DIR = self.PROJECT_ROOT / "data" / "uploads"
+        
         # 确保目录存在
         self.MODELS_DIR.mkdir(exist_ok=True)
         self.DATA_DIR.mkdir(exist_ok=True)
+        self.UPLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
         
         # 初始化数据库
         self.db = Database(str(self.DB_PATH))
@@ -44,6 +48,14 @@ class Config:
         
         # API密钥（如果需要）
         self.API_KEY = os.getenv("API_KEY")
+        
+        # 上传配置
+        self.CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", str(10 * 1024 * 1024)))  # 默认10MB
+        self.UPLOAD_SESSION_EXPIRE_HOURS = int(os.getenv("UPLOAD_SESSION_EXPIRE_HOURS", "24"))  # 默认24小时
+        
+        # 测试配置
+        test_model_path = os.getenv("TEST_UPLOAD_MODEL_PATH", "")
+        self.TEST_UPLOAD_MODEL_PATH = self.PROJECT_ROOT / test_model_path if test_model_path else None
         
         # 模型下载配置
         self.MODELS_TO_DOWNLOAD = self._parse_models_to_download()
