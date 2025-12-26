@@ -5,6 +5,7 @@ AiEdge 综合测试工具
 
 import requests
 import json
+import time
 from core.config import config
 
 # API 基础 URL
@@ -89,6 +90,8 @@ def test_download_model():
         print("❌ 无效选择")
         return False
     
+    print("\n💡 提示：支持断点续传，下载中断后可重新启动继续下载")
+    
     # 下载选中的模型
     for model_info in models_to_download:
         print(f"\n{'='*60}")
@@ -100,25 +103,98 @@ def test_download_model():
             "filename": model_info["filename"]
         }
         
-        print("⏳ 下载中，这可能需要较长时间，请耐心等待...")
-        
         try:
+            # 启动异步下载任务
+            print("📥 启动下载任务...")
             response = requests.post(
-                f"{MAIN_URL}/models/download",
+                f"{MAIN_URL}/models/download/start",
                 json=payload,
-                timeout=3600
+                timeout=10
             )
             
-            print_response(response, f"下载结果 - {model_info['filename']}")
+            if response.status_code != 200:
+                print("❌ 启动下载失败")
+                print_response(response, "错误详情")
+                continue
             
-            if response.status_code == 200:
-                print(f"✅ 下载成功！")
-            else:
-                print(f"❌ 下载失败")
-                return False
+            result = response.json()
+            task_id = result.get('task_id')
+            
+            if not task_id:
+                print("❌ 未获取到任务ID")
+                continue
+            
+            print(f"✅ 任务已启动 (ID: {task_id[:8]}...)")
+            print("⏳ 正在下载，请稍候...\n")
+            
+            # 轮询进度 - 每0.5秒查询一次
+            last_status = ""
+            last_percentage = -1
+            
+            while True:
+                time.sleep(0.5)  # 0.5秒更新一次
                 
+                try:
+                    status_resp = requests.get(
+                        f"{MAIN_URL}/models/download/status/{task_id}",
+                        timeout=5
+                    )
+                    
+                    if status_resp.status_code != 200:
+                        print("\n❌ 查询进度失败")
+                        break
+                    
+                    progress = status_resp.json()
+                    status = progress.get('status')
+                    
+                    if status == 'starting':
+                        msg = progress.get('message', '准备中...')
+                        if msg != last_status:
+                            print(f"⏳ {msg}")
+                            last_status = msg
+                    
+                    elif status == 'downloading':
+                        percentage = progress.get('percentage', 0)
+                        current_str = progress.get('current_str', '未知')
+                        total_str = progress.get('total_str', '未知')
+                        
+                        # 只在进度变化时更新显示
+                        if percentage != last_percentage:
+                            # 创建进度条
+                            bar_length = 40
+                            filled = int(bar_length * percentage / 100)
+                            bar = '█' * filled + '░' * (bar_length - filled)
+                            
+                            # 显示进度条
+                            print(f"\r{bar} {percentage:.1f}% ({current_str}/{total_str})", 
+                                  end='', flush=True)
+                            last_percentage = percentage
+                    
+                    elif status == 'completed':
+                        # 确保进度条显示100%
+                        bar = '█' * 40
+                        print(f"\r{bar} 100.0%")
+                        print(f"\n✅ {progress.get('message', '下载完成')}")
+                        break
+                    
+                    elif status == 'failed':
+                        error_msg = progress.get('error', progress.get('message', '未知错误'))
+                        print(f"\n❌ 下载失败: {error_msg}")
+                        return False
+                    
+                    elif status == 'not_found':
+                        print(f"\n❌ {progress.get('message', '任务不存在')}")
+                        break
+                
+                except requests.RequestException as e:
+                    print(f"\n❌ 网络错误: {str(e)}")
+                    break
+                except Exception as e:
+                    print(f"\n❌ 查询进度出错: {str(e)}")
+                    break
+                    
         except Exception as e:
-            print(f"❌ 下载出错: {str(e)}")
+            print(f"\n❌ 下载出错: {str(e)}")
             return False
     
     return True
