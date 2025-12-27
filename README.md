@@ -9,6 +9,7 @@ AiEdge 采用**主服务 + 子服务**的双层架构：
 - **主服务 (Management Server)** - 端口 23058
   - 模型管理（下载、删除、列表）
   - 子服务控制（启动、停止、重启）
+  - 系统信息查询（硬盘、内存、GPU 显存）
   - 健康检查和状态查询
   
 - **子服务 (Model Service)** - 端口 23059
@@ -23,6 +24,7 @@ AiEdge 采用**主服务 + 子服务**的双层架构：
 AiEdge/
 ├── main.py                      # 主服务启动入口
 ├── model_service.py             # 子服务启动脚本（独立进程）
+├── test.py                      # 综合测试工具（交互式菜单）
 ├── test_chat.py                 # 聊天功能测试工具
 ├── test_download.py             # 模型下载测试工具
 ├── .env                         # 环境配置文件
@@ -34,9 +36,13 @@ AiEdge/
 │   ├── app.py                   # 主服务应用
 │   ├── service_manager.py       # 子进程管理器
 │   ├── models/                  # 数据模型
+│   │   ├── model_manager_models.py     # 模型管理模型
+│   │   └── system_info_models.py       # 系统信息模型
 │   └── routes/                  # 路由处理
-│       ├── model_manager.py     # 模型管理路由
-│       └── service_control.py   # 子服务控制路由
+│       ├── model_manager_routes.py     # 模型管理路由
+│       ├── service_control_routes.py   # 子服务控制路由
+│       ├── system_info_routes.py       # 系统信息路由
+│       └── upload_routes.py            # 分片上传路由
 ├── data/                        # 数据目录
 │   └── models.txt               # 已下载模型记录
 └── models/                      # 模型文件存储
@@ -94,13 +100,20 @@ curl http://localhost:23058/models/download/status/{task_id}
 或使用测试工具：
 
 ```bash
-uv run ./test_download.py
+python test.py
+# 选择菜单选项 [2] 下载模型
 ```
 
 ### 4. 启动子服务（加载所有模型）
 
 ```bash
 curl -X POST http://localhost:23058/service/start
+```
+
+或使用测试工具：
+```bash
+python test.py
+# 选择菜单选项 [9] 启动子服务
 ```
 
 返回示例：
@@ -129,7 +142,8 @@ curl -X POST http://localhost:23059/v1/chat/completions \
 或使用测试工具：
 
 ```bash
-uv run ./test_chat.py
+python test.py
+# 选择菜单选项 [13] 聊天对话测试
 ```
 
 ### 6. 下载新模型后重启子服务
@@ -173,6 +187,37 @@ curl -X POST http://localhost:23058/service/restart
 - `POST /service/stop` - 停止子服务
 - `POST /service/restart` - 重启子服务（用于加载新下载的模型）
 - `GET /service/status` - 查看子服务状态
+
+#### 系统信息
+
+- `GET /system/disk` - 查询硬盘使用情况
+  ```json
+  {
+    "success": true,
+    "total_gb": 465.76,
+    "used_gb": 232.88,
+    "free_gb": 232.88,
+    "percent": 50.0
+  }
+  ```
+
+- `GET /system/memory` - 查询内存使用情况（含 GPU 显存信息）
+  ```json
+  {
+    "success": true,
+    "total_gb": 32.0,
+    "used_gb": 13.0,
+    "available_gb": 19.0,
+    "percent": 40.6,
+    "gpu_memory_shared": true,
+    "gpu_info": {
+      "gpu_type": "NVIDIA Jetson AGX Xavier",
+      "gpu_usage_percent": 25,
+      "cuda_cores": 512,
+      "cuda_version": "11.4.315"
+    }
+  }
+  ```
 
 #### 其他
 
@@ -220,13 +265,17 @@ MODELS_TO_DOWNLOAD=google/gemma-2-2b-it-GGUF|gemma-3-1b-it-f16.gguf,unsloth/Qwen
 # 1. 启动主服务
 python main.py
 
-# 2. 下载模型
+# 2. 查看系统资源
+curl http://localhost:23058/system/disk
+curl http://localhost:23058/system/memory
+
+# 3. 下载模型
 curl -X POST http://localhost:23058/models/download/start -d '{...}'
 
-# 3. 启动子服务
+# 4. 启动子服务
 curl -X POST http://localhost:23058/service/start
 
-# 4. 使用推理服务
+# 5. 使用推理服务
 curl http://localhost:23059/v1/chat/completions -d '{...}'
 ```
 
@@ -264,17 +313,52 @@ curl -X POST http://localhost:23058/service/start
 5. **资源释放**: 停止子服务会优雅释放显存和内存
 6. **热更新**: 下载新模型后需要重启子服务才能加载
 
+## 🎮 Jetson 设备支持
+
+本项目针对 **NVIDIA Jetson AGX Xavier** 等边缘设备进行了优化：
+
+### 特性支持
+
+- ✅ 统一内存架构（Unified Memory）- GPU 与系统内存共享
+- ✅ GPU 显存实时监控 - 通过 `jetson-stats` 获取详细信息
+- ✅ CUDA 加速 - 支持 CUDA 11.4+ 和 TensorRT
+- ✅ 资源监控 - 实时查看硬盘、内存和 GPU 使用情况
+
+### Jetson 设备信息查询
+
+```bash
+# 查询内存和 GPU 显存使用情况
+curl http://localhost:23058/system/memory
+```
+
+### 依赖要求
+
+在 Jetson 设备上需要安装：
+- `psutil` - 系统信息查询
+- `jetson-stats` - Jetson 专用监控工具
+
+```bash
+pip install psutil jetson-stats
+```
+
 ## 🔍 故障排查
 
 ### 子服务启动失败
 - 检查是否有可用模型：`curl http://localhost:23058/models/list`
 - 查看子服务状态：`curl http://localhost:23058/service/status`
 - 检查端口占用：`lsof -i:23059`
+- 检查显存使用情况：`curl http://localhost:23058/system/memory`
 
 ### 模型加载失败
 - 确认模型文件完整下载
-- 检查显存是否足够
+- 检查显存是否足够：`curl http://localhost:23058/system/memory`
+- 查看硬盘空间：`curl http://localhost:23058/system/disk`
 - 查看 `data/models.txt` 是否正确记录
+
+### GPU 信息获取失败
+- 确认已安装 `jetson-stats`：`pip install jetson-stats`
+- Jetson 设备需要运行 `sudo jtop` 验证权限
+- 非 Jetson 设备 GPU 信息将返回 `null`（但不影响其他功能）
 
 ## 📦 依赖管理
 
@@ -286,6 +370,37 @@ pip install -r requirements.txt
 uv pip install -r requirements.txt
 ```
 
----
+## 🧪 测试工具
 
-Made with ❤️ by AiEdge Team
+项目提供了综合测试工具 `test.py`，提供交互式菜单界面：
+
+```bash
+python test.py
+```
+
+### 测试菜单功能
+
+```
+🔧 主服务管理:
+   [1] 健康检查
+   [2] 下载模型 (从 .env 配置)
+   [3] 查看已下载的模型
+   [4] 删除模型
+
+📤 分片上传:
+   [5] 分片上传测试
+
+📊 系统信息:
+   [6] 查询硬盘使用情况
+   [7] 查询内存使用情况
+
+🚀 子服务控制:
+   [8] 查看子服务状态
+   [9] 启动子服务
+   [10] 停止子服务
+   [11] 重启子服务
+
+💬 推理测试:
+   [12] 测试子服务连接
+   [13] 聊天对话测试
+---

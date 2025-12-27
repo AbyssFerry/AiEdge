@@ -266,6 +266,91 @@ def test_delete_model():
 
 
 # ============================================
+# 系统信息测试
+# ============================================
+
+def test_disk_usage():
+    """查询硬盘使用情况"""
+    print_header("硬盘使用情况")
+    
+    try:
+        response = requests.get(f"{MAIN_URL}/system/disk")
+        print_response(response, "硬盘使用情况")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("success"):
+                print("\n📊 硬盘使用详情:")
+                print(f"   总容量: {data['total_gb']:.2f} GB ({data['total']:,} 字节)")
+                print(f"   已使用: {data['used_gb']:.2f} GB ({data['used']:,} 字节)")
+                print(f"   可用空间: {data['free_gb']:.2f} GB ({data['free']:,} 字节)")
+                print(f"   使用率: {data['percent']:.1f}%")
+                
+                # 显示使用率进度条
+                bar_length = 40
+                filled = int(bar_length * data['percent'] / 100)
+                bar = '█' * filled + '░' * (bar_length - filled)
+                print(f"   [{bar}] {data['percent']:.1f}%")
+                
+                return True
+        
+        return False
+        
+    except Exception as e:
+        print(f"❌ 查询硬盘信息失败: {str(e)}")
+        return False
+
+
+def test_memory_usage():
+    """查询内存使用情况"""
+    print_header("内存使用情况")
+    
+    try:
+        response = requests.get(f"{MAIN_URL}/system/memory")
+        print_response(response, "内存使用情况")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("success"):
+                print("\n📊 内存使用详情:")
+                print(f"   总内存: {data['total_gb']:.2f} GB ({data['total']:,} 字节)")
+                print(f"   已使用: {data['used_gb']:.2f} GB ({data['used']:,} 字节)")
+                print(f"   可用内存: {data['available_gb']:.2f} GB ({data['available']:,} 字节)")
+                print(f"   使用率: {data['percent']:.1f}%")
+                
+                # 显示使用率进度条
+                bar_length = 40
+                filled = int(bar_length * data['percent'] / 100)
+                bar = '█' * filled + '░' * (bar_length - filled)
+                print(f"   [{bar}] {data['percent']:.1f}%")
+                
+                # 显示 GPU 信息
+                if data.get('gpu_memory_shared'):
+                    print("\n🎮 GPU 显存信息:")
+                    print(f"   内存与显存共享: 是")
+                    
+                    gpu_info = data.get('gpu_info')
+                    if gpu_info:
+                        print(f"   GPU 型号: {gpu_info.get('gpu_type', 'Unknown')}")
+                        if 'gpu_usage_percent' in gpu_info:
+                            print(f"   GPU 使用率: {gpu_info['gpu_usage_percent']}%")
+                        if 'cuda_cores' in gpu_info:
+                            print(f"   CUDA 核心数: {gpu_info['cuda_cores']}")
+                        if 'cuda_version' in gpu_info:
+                            print(f"   CUDA 版本: {gpu_info['cuda_version']}")
+                    else:
+                        print("   (无法获取详细 GPU 信息)")
+                
+                return True
+        
+        return False
+        
+    except Exception as e:
+        print(f"❌ 查询内存信息失败: {str(e)}")
+        return False
+
+
+# ============================================
 # 子服务控制测试
 # ============================================
 
@@ -378,7 +463,7 @@ def test_model_service_health():
             
     except requests.exceptions.ConnectionError:
         print(f"❌ 子服务未运行")
-        print(f"💡 请先通过主服务启动子服务 (选项 6)")
+        print(f"💡 请先通过主服务启动子服务 (选项 9)")
         return False
     except Exception as e:
         print(f"❌ 连接失败: {str(e)}")
@@ -670,7 +755,7 @@ def test_chunk_upload_full_flow():
             result = complete_response.json()
             print(f"\n✅ 文件上传和合并成功!")
             print(f"   模型路径: {result.get('model_path')}")
-            print(f"\n💡 提示: 使用选项 [8] 重启子服务来加载新模型")
+            print(f"\n💡 提示: 使用选项 [11] 重启子服务来加载新模型")
             return True
         else:
             print("❌ 合并失败")
@@ -799,7 +884,7 @@ def test_chunk_upload_resume():
         
         if complete_response.status_code == 200:
             print("\n✅ 断点续传测试成功!")
-            print("💡 提示: 使用选项 [8] 重启子服务来加载新模型")
+            print("💡 提示: 使用选项 [11] 重启子服务来加载新模型")
             return True
         else:
             print("❌ 合并失败")
@@ -852,15 +937,19 @@ def print_main_menu():
 � 分片上传:
    [5] 分片上传测试
 
+📊 系统信息:
+   [6] 查询硬盘使用情况
+   [7] 查询内存使用情况
+
 🚀 子服务控制:
-   [6] 查看子服务状态
-   [7] 启动子服务
-   [8] 停止子服务
-   [9] 重启子服务
+   [8] 查看子服务状态
+   [9] 启动子服务
+   [10] 停止子服务
+   [11] 重启子服务
 
 💬 推理测试:
-   [10] 测试子服务连接
-   [11] 聊天对话测试
+   [12] 测试子服务连接
+   [13] 聊天对话测试
 
 [0] 退出
 """)
@@ -891,16 +980,20 @@ def main():
             elif choice == '5':
                 test_chunk_upload()
             elif choice == '6':
-                test_service_status()
+                test_disk_usage()
             elif choice == '7':
-                test_start_service()
+                test_memory_usage()
             elif choice == '8':
-                test_stop_service()
+                test_service_status()
             elif choice == '9':
-                test_restart_service()
+                test_start_service()
             elif choice == '10':
-                test_model_service_health()
+                test_stop_service()
             elif choice == '11':
+                test_restart_service()
+            elif choice == '12':
+                test_model_service_health()
+            elif choice == '13':
                 test_chat_completion()
             else:
                 print("❌ 无效选择，请重新输入")

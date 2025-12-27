@@ -448,6 +448,56 @@
         }
       }
     },
+    "/system/disk": {
+      "get": {
+        "tags": [
+          "系统信息"
+        ],
+        "summary": "查询硬盘使用情况",
+        "description": "查询系统根目录的硬盘使用情况，包括总容量、已使用、可用空间和使用百分比",
+        "operationId": "get_disk_usage_system_disk_get",
+        "responses": {
+          "200": {
+            "description": "成功返回硬盘使用情况",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiskUsageResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        }
+      }
+    },
+    "/system/memory": {
+      "get": {
+        "tags": [
+          "系统信息"
+        ],
+        "summary": "查询内存使用情况",
+        "description": "查询系统内存使用情况，包括总内存、可用内存、已使用内存和 GPU 显存信息（Jetson 设备内存与显存共享）",
+        "operationId": "get_memory_usage_system_memory_get",
+        "responses": {
+          "200": {
+            "description": "成功返回内存使用情况",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryUsageResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health Check",
@@ -730,6 +780,73 @@
           "uploaded_chunks": 335
         }
       },
+      "DiskUsageResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "查询是否成功"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "总硬盘容量（字节）"
+          },
+          "used": {
+            "type": "integer",
+            "title": "Used",
+            "description": "已使用容量（字节）"
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free",
+            "description": "可用容量（字节）"
+          },
+          "percent": {
+            "type": "number",
+            "title": "Percent",
+            "description": "使用百分比"
+          },
+          "total_gb": {
+            "type": "number",
+            "title": "Total Gb",
+            "description": "总容量（GB）"
+          },
+          "used_gb": {
+            "type": "number",
+            "title": "Used Gb",
+            "description": "已使用容量（GB）"
+          },
+          "free_gb": {
+            "type": "number",
+            "title": "Free Gb",
+            "description": "可用容量（GB）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "total",
+          "used",
+          "free",
+          "percent",
+          "total_gb",
+          "used_gb",
+          "free_gb"
+        ],
+        "title": "DiskUsageResponse",
+        "description": "硬盘使用情况响应模型",
+        "example": {
+          "free": 250053931008,
+          "free_gb": 232.88,
+          "percent": 50.0,
+          "success": true,
+          "total": 500107862016,
+          "total_gb": 465.76,
+          "used": 250053931008,
+          "used_gb": 232.88
+        }
+      },
       "DownloadProgressResponse": {
         "properties": {
           "status": {
@@ -844,6 +961,97 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "MemoryUsageResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "查询是否成功"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "系统总内存（字节）"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available",
+            "description": "系统可用内存（字节）"
+          },
+          "used": {
+            "type": "integer",
+            "title": "Used",
+            "description": "系统已使用内存（字节）"
+          },
+          "percent": {
+            "type": "number",
+            "title": "Percent",
+            "description": "系统内存使用百分比"
+          },
+          "total_gb": {
+            "type": "number",
+            "title": "Total Gb",
+            "description": "系统总内存（GB）"
+          },
+          "available_gb": {
+            "type": "number",
+            "title": "Available Gb",
+            "description": "系统可用内存（GB）"
+          },
+          "used_gb": {
+            "type": "number",
+            "title": "Used Gb",
+            "description": "系统已使用内存（GB）"
+          },
+          "gpu_memory_shared": {
+            "type": "boolean",
+            "title": "Gpu Memory Shared",
+            "description": "GPU与系统内存是否共享（Jetson设备为True）",
+            "default": true
+          },
+          "gpu_info": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Info",
+            "description": "GPU内存详细信息（如果可用）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "total",
+          "available",
+          "used",
+          "percent",
+          "total_gb",
+          "available_gb",
+          "used_gb"
+        ],
+        "title": "MemoryUsageResponse",
+        "description": "内存使用情况响应模型（包含GPU共享内存信息）",
+        "example": {
+          "available": 20401094656,
+          "available_gb": 19.0,
+          "gpu_info": {
+            "shared_memory": true,
+            "total_memory_gb": 32.0,
+            "type": "Jetson AGX Xavier"
+          },
+          "gpu_memory_shared": true,
+          "percent": 40.6,
+          "success": true,
+          "total": 34359738368,
+          "total_gb": 32.0,
+          "used": 13958643712,
+          "used_gb": 13.0
+        }
       },
       "ModelDeleteRequest": {
         "properties": {
